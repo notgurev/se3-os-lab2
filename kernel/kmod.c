@@ -25,7 +25,6 @@
 #define WR_VALUE _IOW('a','a',struct message*)
 #define RD_VALUE _IOR('a','b',struct message*)
 
-
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("Stab linux module for operating system's lab");
 MODULE_VERSION("1.0");
@@ -53,14 +52,6 @@ struct message {
     struct vfsmount_cut vfs_cut;
     struct net_device_cut nd_cut;
 };
-
-// in kernel space 
-struct vfsmount_cut* vfs;
-struct net_device_cut* nd;
-
-struct task_struct *ts1;
-
-// will send to user space
 struct message* msg;
 
 static int      __init kmod_init(void);
@@ -73,7 +64,6 @@ static long     etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg
 
 void fill_structs(void);
 
-// File operation structure
 static struct file_operations fops = {
     .owner          = THIS_MODULE,
     .read           = etx_read,
@@ -83,27 +73,23 @@ static struct file_operations fops = {
     .release        = etx_release,
 };
 
-// This function will be called when we open the Device file
 static int etx_open(struct inode *inode, struct file *file) {
-    pr_info("Device File Opened...!!!\n");
+    pr_info("Device file opened\n");
     return 0;
 }
 
-// This function will be called when we close the Device file
 static int etx_release(struct inode *inode, struct file *file) {
-    pr_info("Device File Closed...!!!\n");
+    pr_info("Device file closed\n");
     return 0;
 }
 
-// This function will be called when we read the Device file
 static ssize_t etx_read(struct file *filp, char __user *buf, size_t len, loff_t *off) {
-    pr_info("Read Function\n");
+    pr_info("Reading from device file\n");
     return 0;
 }
 
-// This function will be called when we write the Device file
 static ssize_t etx_write(struct file *filp, const char __user *buf, size_t len, loff_t *off) {
-    pr_info("Write function\n");
+    pr_info("Writing to device file\n");
     return len;
 }
 
@@ -114,50 +100,50 @@ static long etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg) {
     switch(cmd) {
         case WR_VALUE:
             if (copy_from_user(&fd ,(int*) arg, sizeof(fd))) {
-                pr_err("Data write : Err!\n");
+                pr_err("Failed to write data to user space\n");
             }
             pr_info("Pid = %d\n", fd);
             break;
         case RD_VALUE:
             fill_structs();
             if (copy_to_user((struct message*) arg, msg, sizeof(struct message))) {
-                pr_err("Data read : Err!\n");
+                pr_err("Failed to read data from user space\n");
             }
             break;
         default:
-            pr_info("Default\n");
+            pr_err("Unknown command\n");
             break;
     }
     return 0;
 }
 
 static int __init kmod_init(void) {
-    printk(KERN_INFO "kmod: module loaded.\n");
+    printk(KERN_INFO "kmod: module loaded\n");
 
-    /*Allocating Major number*/
-    if((alloc_chrdev_region(&dev, 0, 1, "etx_Dev")) <0){
+    // Allocating Major number
+    if((alloc_chrdev_region(&dev, 0, 1, "etx_Dev")) < 0){
         pr_err("Cannot allocate major number\n");
         return -1;
     }
-    pr_info("Major = %d Minor = %d \n",MAJOR(dev), MINOR(dev));
+    pr_info("Major = %d Minor = %d \n", MAJOR(dev), MINOR(dev));
 
-    /*Creating cdev structure*/
-    cdev_init(&etx_cdev,&fops);
+    // Creating cdev structure
+    cdev_init(&etx_cdev, &fops);
 
-    /*Adding character device to the system*/
-    if((cdev_add(&etx_cdev,dev,1)) < 0){
+    // Adding character device to the system
+    if ((cdev_add(&etx_cdev,dev,1)) < 0) {
         pr_err("Cannot add the device to the system\n");
         goto r_class;
     }
 
-    /*Creating struct class*/
-    if((dev_class = class_create(THIS_MODULE,"etx_class")) == NULL){
+    // Creating struct class
+    if ((dev_class = class_create(THIS_MODULE,"etx_class")) == NULL) {
         pr_err("Cannot create the struct class\n");
         goto r_class;
     }
 
-    /*Creating device*/
-    if((device_create(dev_class,NULL,dev,NULL,"etx_device")) == NULL){
+    // Creating device
+    if ((device_create(dev_class,NULL,dev,NULL,"etx_device")) == NULL) {
         pr_err("Cannot create the Device 1\n");
         goto r_device;
     }
@@ -168,7 +154,7 @@ static int __init kmod_init(void) {
 r_device:
     class_destroy(dev_class);
 r_class:
-    unregister_chrdev_region(dev,1);
+    unregister_chrdev_region(dev, 1);
     return -1;
 }
 
@@ -180,6 +166,7 @@ void fill_structs() {
     if(!f.file) {
         printk(KERN_INFO "kmod: error opening file by descriptor\n");
     }
+    
     struct vfsmount *vfs = f.file->f_path.mnt;
     struct super_block *sb = vfs->mnt_sb;
     msg->vfs_cut = {
@@ -190,12 +177,11 @@ void fill_structs() {
         .s_maxbytes = sb->s_maxbytes,
         .s_dev = sb->s_dev
     };
-
     fdput(f);
 
     // net_device
     msg->net_device = {
-
+        
     }
 }
 
