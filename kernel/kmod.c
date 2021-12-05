@@ -19,6 +19,11 @@
 #include <linux/netdevice.h>
 #include <linux/device.h>
 
+// our
+#include <linux/fd.h>
+#include <linux/path.h>
+#include <linux/mount.h>
+
 #define WR_VALUE _IOW('a','a',struct message*)
 #define RD_VALUE _IOR('a','b',struct message*)
 
@@ -27,37 +32,34 @@ MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("Stab linux module for operating system's lab");
 MODULE_VERSION("1.0");
 
-
-
 dev_t dev = 0;
+
 static struct class *dev_class;
 static struct cdev etx_cdev;
 
-struct signal_info {
-    int nr_threads;
-    int prio;
-    unsigned int flags;
-    unsigned int sigHandlersAddr[64];
+struct vfsmount_cut {
+    int mnt_flags;
+    unsigned char s_blocksize_bits;
+    unsigned long s_blocksize;
+    int s_count;
+    loff_t s_maxbytes;
+    dev_t s_dev
 };
 
-struct n_dev_info {
-    unsigned int size;
-    char name[10][16];
+// kernel -> user space
+struct message { 
+    struct vfsmount_cut vfs_cut; // struct #1
+    // todo struct #2
 };
 
-struct message {
-    struct signal_info si;
-    struct n_dev_info ndi;
-};
+// in kernel space 
+struct vfsmount_cut* vfs; // struct #1
+// todo struct #2
 
 struct task_struct *ts1;
 
-struct signal_info* si;
-struct n_dev_info* ndi;
+// will send to user space
 struct message* msg;
-
-struct net_device *n_dev;
-
 
 static int      __init kmod_init(void);
 static void     __exit kmod_exit(void);
@@ -83,52 +85,44 @@ static struct file_operations fops =
 /*
 ** This function will be called when we open the Device file
 */
-static int etx_open(struct inode *inode, struct file *file)
-{
+static int etx_open(struct inode *inode, struct file *file) {
     pr_info("Device File Opened...!!!\n");
     return 0;
 }
 /*
 ** This function will be called when we close the Device file
 */
-static int etx_release(struct inode *inode, struct file *file)
-{
-
+static int etx_release(struct inode *inode, struct file *file) {
     pr_info("Device File Closed...!!!\n");
     return 0;
 }
 /*
 ** This function will be called when we read the Device file
 */
-static ssize_t etx_read(struct file *filp, char __user *buf, size_t len, loff_t *off)
-{
-pr_info("Read Function\n");
-return 0;
+static ssize_t etx_read(struct file *filp, char __user *buf, size_t len, loff_t *off) {
+    pr_info("Read Function\n");
+    return 0;
 }
 /*
 ** This function will be called when we write the Device file
 */
-static ssize_t etx_write(struct file *filp, const char __user *buf, size_t len, loff_t *off)
-{
-pr_info("Write function\n");
-return len;
+static ssize_t etx_write(struct file *filp, const char __user *buf, size_t len, loff_t *off) {
+    pr_info("Write function\n");
+    return len;
 }
 
 int pid = 0;
 
+int fd = 0;
 
-static long etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
-{
-
-
-
+static long etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg) {
     switch(cmd) {
         case WR_VALUE:
-            if( copy_from_user(&pid ,(int*) arg, sizeof(pid)) )
+            if( copy_from_user(&fd ,(int*) arg, sizeof(fd)) )
             {
                 pr_err("Data Write : Err!\n");
             }
-            pr_info("Pid = %d\n", pid);
+            pr_info("Pid = %d\n", fd);
             break;
         case RD_VALUE:
             fill_structs();
@@ -176,7 +170,7 @@ static int __init kmod_init(void) {
         pr_err("Cannot create the Device 1\n");
         goto r_device;
     }
-    pr_info("Device Driver Insert...Done!!!\n");
+    pr_info("Device driver insert done\n");
 
 
 
@@ -189,40 +183,39 @@ static int __init kmod_init(void) {
     return -1;
 }
 
+
+
 void fill_structs() {
-
-    ts1 = get_pid_task(find_get_pid(pid), PIDTYPE_PID);
-
-    si = vmalloc(sizeof(struct signal_info));
-    si->nr_threads = ts1->signal->nr_threads;
-    si->prio = ts1->prio;
-    si->flags = ts1->signal->flags;
-
-    int i;
-
-    for (i = 0; i<64; i++)
-        si->sigHandlersAddr[i] = (unsigned int) ts1->sighand->action[i].sa.sa_handler;
+    // ts1 = get_pid_task(find_get_pid(pid), PIDTYPE_PID);
 
 
-    ndi = vmalloc(sizeof(struct n_dev_info));
-
-    read_lock(&dev_base_lock);
-    n_dev = first_net_device(&init_net);
-    int c = 0;
-    while (n_dev) {
-        strcpy((ndi->name)[c], n_dev->name);
-        n_dev = next_net_device(n_dev);
-        c++;
+    struct fd f = fdget(fd);
+    if(!f.file) {
+        printk(KERN_INFO "kmod: error opening file by descriptor\n");
     }
 
-    read_unlock(&dev_base_lock);
+    struct vfsmount_cut vfs_cut;
+    struct vfsmount * vfs = f.file->f_path.mnt;
+    vfs_cut.mnt_flags = vfs->mnt_flags;
+    vfs_cut.s_blocksize_bits = vfs->mnt_sb->s_blocksize_bits;
+    vfs_cut.s_blocksize = vfs->mnt_sb->s_blocksize;
+    vfs_cut.s_count = vfs->mnt_sb->s_count;
+    vfs_cut.s_maxbytes = vfs->mnt_sb->s_maxbytes;
+    vfs_cut.s_dev = vfs->mnt_sb->s_dev;
 
-    ndi->size = c;
+    fdput(f);
+
+
+    // si = vmalloc(sizeof(struct signal_info));
+    // si->nr_threads = ts1->signal->nr_threads;
+    // si->prio = ts1->prio;
+    // si->flags = ts1->signal->flags;
+
 
     msg = vmalloc(sizeof(struct message));
-    msg->si = *si;
-    msg->ndi = *ndi;
-
+    msg->vfs_cut = vfs_cut;
+    // msg->si = *si;
+    // msg->ndi = *ndi;
 }
 
 static void __exit kmod_exit(void) {
