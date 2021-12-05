@@ -5,18 +5,14 @@
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/uaccess.h>
-#include <linux/device.h>
 #include <linux/percpu-defs.h>
 #include <linux/delay.h>
-
 #include <linux/filter.h>
 #include <linux/ioctl.h>
 #include <linux/pid.h>
 #include <linux/sched.h>
-
 #include <linux/netdevice.h>
 #include <linux/device.h>
-
 #include <linux/fd.h>
 #include <linux/path.h>
 #include <linux/mount.h>
@@ -45,14 +41,13 @@ struct vfsmount_cut {
 
 struct net_device_cut {
 
-}
+};
 
-// kernel -> user space
+// kernel --message--> user space
 struct message { 
     struct vfsmount_cut vfs_cut;
     struct net_device_cut nd_cut;
 };
-struct message* msg;
 
 static int      __init kmod_init(void);
 static void     __exit kmod_exit(void);
@@ -62,7 +57,7 @@ static ssize_t  etx_read(struct file *filp, char __user *buf, size_t len,loff_t 
 static ssize_t  etx_write(struct file *filp, const char *buf, size_t len, loff_t * off);
 static long     etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 
-void fill_structs(void);
+static struct message* read_structs(void);
 
 static struct file_operations fops = {
     .owner          = THIS_MODULE,
@@ -93,28 +88,26 @@ static ssize_t etx_write(struct file *filp, const char __user *buf, size_t len, 
     return len;
 }
 
-int pid = 0;
-int fd = 0;
+static int fd = 0;
 
 static long etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg) {
     switch(cmd) {
         case WR_VALUE:
-            if (copy_from_user(&fd ,(int*) arg, sizeof(fd))) {
+            if (copy_from_user(&fd ,(int *) arg, sizeof(fd))) {
                 pr_err("Failed to write data to user space\n");
             }
-            pr_info("Pid = %d\n", fd);
-            break;
+            pr_info("Received file descriptor = %d\n", fd);
+            return 0;
         case RD_VALUE:
-            fill_structs();
+            struct message* msg = read_structs();
             if (copy_to_user((struct message*) arg, msg, sizeof(struct message))) {
                 pr_err("Failed to read data from user space\n");
             }
-            break;
+            return 0;
         default:
-            pr_err("Unknown command\n");
-            break;
+            pr_err("Unknown command\n"); 
+            return 0;
     }
-    return 0;
 }
 
 static int __init kmod_init(void) {
@@ -158,8 +151,8 @@ r_class:
     return -1;
 }
 
-void fill_structs() {
-    msg = vmalloc(sizeof(struct message));
+static struct message* read_structs(void) {
+    struct message* msg = vmalloc(sizeof(struct message));
 
     // vfsmount
     struct fd f = fdget(fd);
@@ -183,6 +176,8 @@ void fill_structs() {
     msg->net_device = {
         
     }
+
+    return msg;
 }
 
 static void __exit kmod_exit(void) {
