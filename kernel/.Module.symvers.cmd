@@ -1,1 +1,0 @@
-cmd_/home/notgurev/se3-os-lab2/kernel/Module.symvers := sed 's/ko$$/o/' /home/notgurev/se3-os-lab2/kernel/modules.order | scripts/mod/modpost -m -a   -o /home/notgurev/se3-os-lab2/kernel/Module.symvers -e -i Module.symvers   -T -
