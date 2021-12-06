@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <malloc.h>
-
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -20,13 +19,20 @@ struct vfsmount_cut {
     dev_t s_dev;
 };
 
-struct net_device_cut {
-
+struct socket_cut {
+    socket_state state;
+    short type;
+    unsigned long flags;
 };
 
-struct message { 
+struct message_to_user { 
     struct vfsmount_cut vfs_cut;
-    struct net_device_cut nd_cut;
+    struct socket_cut socket_cut;
+};
+
+struct message_to_kernel {
+    int fd;
+    int socketfd;
 };
 
 int main(int argc, char *argv[]) {
@@ -40,6 +46,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    int socketfd = socket(AF_INET, SOCK_STREAM, 0);
+
     char* deviceFile = "/dev/etx_device";
     int driver = open(deviceFile, O_RDWR);
     if (driver != 0) {
@@ -47,23 +55,57 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    if (ioctl(driver, WR_VALUE, (int *) &fd)) {
+    struct message_to_kernel kmsg = {
+        .fd = fd,
+        .socketfd = socketfd
+    };
+    if (ioctl(driver, WR_VALUE, (message_to_kernel *) &kmsg)) {
         puts("failed to write to driver");
     }
 
-    struct message msg;
-    if (ioctl(driver, RD_VALUE, (struct message *) &msg)) {
+    struct message_to_user msg;
+    if (ioctl(driver, RD_VALUE, (struct message_to_user *) &msg)) {
         puts("failed to read structs from driver");
     }
 
-    printf("Flags: %#0x\n", msg.vfs_cut.mnt_flags);
-    printf("Block size in bits: %u\n", msg.vfs_cut.s_blocksize_bits);
-    printf("Block size in bytes: %lu\n", msg.vfs_cut.s_blocksize);
-    printf("Reference count: %d\n", msg.vfs_cut.s_count);
-    printf("Maximum size of files: %ld\n", msg.vfs_cut.s_maxbytes);
-    printf("Device identifier: %lu\n", msg.vfs_cut.s_dev);
+    struct vfsmount_cut vc = msg.vfs_cut;
+    struct socket_cut sc = msg.socket_cut;
+
+    puts(" --- vfsmount --- ");
+    printf("Flags: %#0x\n", vc.mnt_flags);
+    printf("Block size in bits: %u\n", vc.s_blocksize_bits);
+    printf("Block size in bytes: %lu\n", vc.s_blocksize);
+    printf("Reference count: %d\n", vc.s_count);
+    printf("Maximum size of files: %ld\n", vc.s_maxbytes);
+    printf("Device identifier: %lu\n", vc.s_dev);
+    puts(" --- socket --- ");
+
+    char* sstates[] = {
+        "not allocated",
+        "unconnected to any socket",
+        "in process of connecting",
+        "connected to socket",
+        "in process of disconnecting"
+    };
+
+    char* stypes[] = {
+        "",
+        "SOCK_DGRAM",	    
+	    "SOCK_STREAM",
+	    "SOCK_RAW",	   
+	    "SOCK_RDM",	    
+	    "SOCK_SEQPACKET",
+	    "SOCK_DCCP", 
+        "", "", "",
+	    "SOCK_PACKET"
+    }; 
+
+    printf("Socket state: %s\n", sstates[sc.state]);
+    printf("Socket type: %s\n", stypes[sc.type])
+    printf("Socket flags: %#0x\n", sc.flags);
 
     close(fd); 
+    close(socketfd);
     close(driver);
 
     return 0;

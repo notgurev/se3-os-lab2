@@ -17,9 +17,10 @@
 #include <linux/path.h>
 #include <linux/mount.h>
 #include <linux/net_namespace.h>
+#include <linux/net.h>
 
-#define WR_VALUE _IOW('a','a',struct message*)
-#define RD_VALUE _IOR('a','b',struct message*)
+#define WR_VALUE _IOW('a','a',struct message_to_user*)
+#define RD_VALUE _IOR('a','b',struct message_to_user*)
 
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("Stab linux module for operating system's lab");
@@ -39,14 +40,21 @@ struct vfsmount_cut {
     dev_t s_dev
 };
 
-struct net_device_cut {
-
+struct socket_cut {
+    socket_state state;
+    short type;
+    unsigned long flags;
 };
 
 // kernel --message--> user space
-struct message { 
+struct message_to_user { 
     struct vfsmount_cut vfs_cut;
-    struct net_device_cut nd_cut;
+    struct socket_cut socket_cut;
+};
+
+struct message_to_kernel {
+    int fd;
+    int socketfd;
 };
 
 static int      __init kmod_init(void);
@@ -57,7 +65,7 @@ static ssize_t  etx_read(struct file *filp, char __user *buf, size_t len,loff_t 
 static ssize_t  etx_write(struct file *filp, const char *buf, size_t len, loff_t * off);
 static long     etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 
-static struct message* read_structs(void);
+static struct message_to_user* read_structs(void);
 
 static struct file_operations fops = {
     .owner          = THIS_MODULE,
@@ -89,18 +97,21 @@ static ssize_t etx_write(struct file *filp, const char __user *buf, size_t len, 
 }
 
 static int fd = 0;
+static int socketfd = 0;
 
 static long etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg) {
+    struct message_to_kernel msg_to_kern; 
     switch(cmd) {
         case WR_VALUE:
-            if (copy_from_user(&fd ,(int *) arg, sizeof(fd))) {
+            if (copy_from_user(&msg_to_kern ,(int *) arg, sizeof(struct message_to_kernel))) {
                 pr_err("Failed to write data to user space\n");
             }
-            pr_info("Received file descriptor = %d\n", fd);
+            fd = msg_to_kern.fd;
+            socketfd = msg_to_kern.socketfd;
             return 0;
         case RD_VALUE:
-            struct message* msg = read_structs();
-            if (copy_to_user((struct message*) arg, msg, sizeof(struct message))) {
+            struct message_to_user* msg = read_structs();
+            if (copy_to_user((struct message_to_user*) arg, msg, sizeof(struct message_to_user))) {
                 pr_err("Failed to read data from user space\n");
             }
             return 0;
@@ -151,8 +162,8 @@ r_class:
     return -1;
 }
 
-static struct message* read_structs(void) {
-    struct message* msg = vmalloc(sizeof(struct message));
+static struct message_to_user* read_structs(void) {
+    struct message_to_user* msg = vmalloc(sizeof(struct message_to_user));
 
     // vfsmount
     struct fd f = fdget(fd);
@@ -172,9 +183,16 @@ static struct message* read_structs(void) {
     };
     fdput(f);
 
-    // net_device
-    msg->net_device = {
-        
+    // socket
+    int err = 0;
+    struct socket *s = sockfd_lookup(socketfd, &err);
+    if (err < 0) {
+        printk(KERN_INFO "kmod: error on socket lookup\n");
+    }
+    msg->socket_cut = {
+        .state = s->state,
+        .type = s->type,
+        .flags = s->flags
     }
 
     return msg;
