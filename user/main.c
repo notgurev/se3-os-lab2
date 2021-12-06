@@ -55,6 +55,10 @@ int main(int argc, char *argv[]) {
     }
 
     int socketfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (socketfd < 0) {
+        puts("failed to create socket");
+        return -1;
+    }
 
     char* deviceFile = "/dev/etx_device";
     int driver = open(deviceFile, O_RDWR);
@@ -110,7 +114,7 @@ int main(int argc, char *argv[]) {
 
     printf("Socket state: %s\n", sstates[sc.state]);
     printf("Socket type: %s\n", stypes[sc.type]);
-    printf("Socket flags: %#0x\n", sc.flags);
+    printf("Socket flags: %#0lx\n", sc.flags);
 
     close(fd); 
     close(socketfd);

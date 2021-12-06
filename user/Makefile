@@ -8,4 +8,6 @@ clean:
 	rm -f main
 
 run:
-	sudo ./main ./main.c
+	@echo
+	@sudo ./main ./main.c
+	@echo
