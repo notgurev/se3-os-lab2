@@ -37,7 +37,7 @@ struct vfsmount_cut {
     unsigned long s_blocksize;
     int s_count;
     loff_t s_maxbytes;
-    dev_t s_dev
+    dev_t s_dev;
 };
 
 struct socket_cut {
@@ -101,6 +101,8 @@ static int socketfd = 0;
 
 static long etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg) {
     struct message_to_kernel msg_to_kern; 
+    struct message_to_user* msg;
+
     switch(cmd) {
         case WR_VALUE:
             if (copy_from_user(&msg_to_kern ,(int *) arg, sizeof(struct message_to_kernel))) {
@@ -110,7 +112,7 @@ static long etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg) {
             socketfd = msg_to_kern.socketfd;
             return 0;
         case RD_VALUE:
-            struct message_to_user* msg = read_structs();
+            msg = read_structs();
             if (copy_to_user((struct message_to_user*) arg, msg, sizeof(struct message_to_user))) {
                 pr_err("Failed to read data from user space\n");
             }
@@ -173,7 +175,7 @@ static struct message_to_user* read_structs(void) {
     
     struct vfsmount *vfs = f.file->f_path.mnt;
     struct super_block *sb = vfs->mnt_sb;
-    msg->vfs_cut = {
+    msg->vfs_cut = (struct vfsmount_cut) {
         .mnt_flags = vfs->mnt_flags,
         .s_blocksize_bits = sb->s_blocksize_bits,
         .s_blocksize = sb->s_blocksize,
@@ -189,11 +191,11 @@ static struct message_to_user* read_structs(void) {
     if (err < 0) {
         printk(KERN_INFO "kmod: error on socket lookup\n");
     }
-    msg->socket_cut = {
+    msg->socket_cut = (struct socket_cut) {
         .state = s->state,
         .type = s->type,
         .flags = s->flags
-    }
+    };
 
     return msg;
 }

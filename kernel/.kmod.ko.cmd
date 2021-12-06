@@ -1,0 +1,1 @@
+cmd_/home/notgurev/se3-os-lab2/kernel/kmod.ko := ld -r -m elf_x86_64  --build-id=sha1  -T scripts/module.lds -o /home/notgurev/se3-os-lab2/kernel/kmod.ko /home/notgurev/se3-os-lab2/kernel/kmod.o /home/notgurev/se3-os-lab2/kernel/kmod.mod.o;  true
