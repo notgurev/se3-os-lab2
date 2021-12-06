@@ -108,15 +108,16 @@ int main(int argc, char *argv[]) {
     if (argc < 1) {
         puts("wrong number of arguments, expected 1");
     }
+
+    struct message_to_kernel kmsg;
+
     char* filename = argv[1];
-    int fd = open(filename, O_RDONLY);
-    if (fd < 0) {
+    if ((kmsg.fd = open(filename, O_RDONLY)) < 0) {
         printf("failed to open file %s\n", filename);
         return -1;
     }
 
-    int socketfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (socketfd < 0) {
+    if ((kmsg.socketfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         puts("failed to create socket");
         return -1;
     }
@@ -128,10 +129,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    struct message_to_kernel kmsg = {
-        .fd = fd,
-        .socketfd = socketfd
-    };
+    
     if (ioctl(driver, WR_VALUE, (struct message_to_kernel *) &kmsg)) {
         puts("failed to write to driver");
     }
@@ -179,8 +177,8 @@ int main(int argc, char *argv[]) {
     printf("Socket type: %s\n", stypes[sc.type]);
     print_sflags(sc.flags);
 
-    close(fd); 
-    close(socketfd);
+    close(kmsg.fd); 
+    close(kmsg.socketfd);
     close(driver);
 
     return 0;

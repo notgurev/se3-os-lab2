@@ -9,5 +9,5 @@ build:
 clean:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
 
-install:
+install: build
 	sudo insmod kmod.ko
