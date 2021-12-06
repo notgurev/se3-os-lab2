@@ -2,28 +2,29 @@ all:
 	@echo "Targets: kernel, user"
 
 # kernel
-obj-m += kmod.o
+obj-m += kernel/kmod.o
 
 kernel: kbuild kinstall
 
 kbuild:
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
+	make -C /lib/modules/$(shell uname -r)/build M=$(PWD)/kernel modules
 
 kclean:
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
+	make -C /lib/modules/$(shell uname -r)/build M=$(PWD)/kernel clean
 
 kinstall: build
-	sudo insmod kmod.ko
+	sudo insmod kernel/kmod.ko
 
 # user
 
 user: ubuild urun
 
 ubuild:
-	gcc main.c -o main
+	gcc user/main.c -o user/main
 
 uclean:
-	rm -f main
+	rm -f user/main
 
 urun:
-	sudo ./main main.c
+	sudo user/main Makefile
+
