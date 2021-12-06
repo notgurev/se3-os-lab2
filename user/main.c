@@ -15,6 +15,67 @@
 #include <sys/socket.h>                                                                                 
 #include <netinet/in.h> 
 
+#define MNT_NOSUID      0x01
+#define MNT_NODEV       0x02
+#define MNT_NOEXEC      0x04
+#define MNT_NOATIME     0x08
+#define MNT_NODIRATIME  0x10
+#define MNT_RELATIME    0x20
+#define MNT_READONLY    0x40
+#define MNT_NOSYMFOLLOW 0x80
+#define MNT_SHRINKABLE  0x100
+#define MNT_WRITE_HOLD  0x200
+#define MNT_SHARED      0x1000 
+#define MNT_UNBINDABLE  0x2000  
+
+#define SOCK_ASYNC_NOSPACE          0
+#define SOCK_ASYNC_WAITDATA         1
+#define SOCK_NOSPACE                2
+#define SOCK_PASSCRED               3
+#define SOCK_PASSSEC                4
+#define SOCK_EXTERNALLY_ALLOCATED   5
+
+#define flagdef(name, value) flags[value] = #name
+
+char *flags[MNT_UNBINDABLE + 1];
+char *sflags[SOCK_EXTERNALLY_ALLOCATED + 1] = {
+    "SOCK_ASYNC_NOSPACE",
+    "SOCK_ASYNC_WAITDATA",
+    "SOCK_NOSPACE",
+    "SOCK_PASSCRED",
+    "SOCK_PASSSEC"
+};
+
+void init_flags() {
+    flagdef(MNT_NOSUID, 0x01);
+    flagdef(MNT_NODEV, 0x02);
+    flagdef(MNT_NOEXEC, 0x04);
+    flagdef(MNT_NOATIME, 0x08);
+    flagdef(MNT_NODIRATIME, 0x10);
+    flagdef(MNT_RELATIME, 0x20);
+    flagdef(MNT_READONLY, 0x40);
+    flagdef(MNT_NOSYMFOLLOW, 0x80);
+    flagdef(MNT_SHRINKABLE,  0x100);
+    flagdef(MNT_WRITE_HOLD,  0x200);
+    flagdef(MNT_SHARED,  0x1000);
+    flagdef(MNT_UNBINDABLE , 0x2000);
+}
+
+void print_flags(int number) {
+    printf("Flags: ");
+    for (int mask = 1; mask <= MNT_UNBINDABLE; mask = mask << 1) {
+        if ((number & mask) != 0) {
+            printf("%s ", flags[mask]);
+        }
+    }
+    puts("");
+}
+
+void print_sflags(int number) {
+    printf("Socket flags: ");
+    puts(sflags[number]);
+}
+
 #define WR_VALUE _IOW('a','a',struct message*)
 #define RD_VALUE _IOR('a','b',struct message*)
 
@@ -42,48 +103,6 @@ struct message_to_kernel {
     int fd;
     int socketfd;
 };
-
-#define MNT_NOSUID    0x01
-#define MNT_NODEV    0x02
-#define MNT_NOEXEC    0x04
-#define MNT_NOATIME    0x08
-#define MNT_NODIRATIME    0x10
-#define MNT_RELATIME    0x20
-#define MNT_READONLY    0x40
-#define MNT_NOSYMFOLLOW    0x80
-#define MNT_SHRINKABLE  0x100
-#define MNT_WRITE_HOLD  0x200
-#define MNT_SHARED  0x1000 
-#define MNT_UNBINDABLE  0x2000  
-
-#define flagdef(name, value) flags[value] = #name
-
-char *flags[MNT_UNBINDABLE + 1];
-
-void init_flags() {
-    flagdef(MNT_NOSUID, 0x01);
-    flagdef(MNT_NODEV, 0x02);
-    flagdef(MNT_NOEXEC, 0x04);
-    flagdef(MNT_NOATIME, 0x08);
-    flagdef(MNT_NODIRATIME, 0x10);
-    flagdef(MNT_RELATIME, 0x20);
-    flagdef(MNT_READONLY, 0x40);
-    flagdef(MNT_NOSYMFOLLOW, 0x80);
-    flagdef(MNT_SHRINKABLE,  0x100);
-    flagdef(MNT_WRITE_HOLD,  0x200);
-    flagdef(MNT_SHARED,  0x1000);
-    flagdef(MNT_UNBINDABLE , 0x2000);  
-}
-
-void print_flags(int number) {
-    printf("Flags: ");
-    for (int mask = 1; mask <= MNT_UNBINDABLE; mask = mask << 1) {
-        if ((number & mask) != 0) {
-            printf("%s ", flags[mask]);
-        }
-    }
-    puts("");
-}
 
 int main(int argc, char *argv[]) {
     if (argc < 1) {
@@ -128,14 +147,13 @@ int main(int argc, char *argv[]) {
     init_flags();
 
     puts(" --- vfsmount --- ");
-    printf("Flags (hex): %0x\n", vc.mnt_flags);
     print_flags(vc.mnt_flags);
     printf("Block size in bits: %u\n", vc.s_blocksize_bits);
     printf("Block size in bytes: %lu\n", vc.s_blocksize);
     printf("Reference count: %d\n", vc.s_count);
     printf("Maximum size of files: %ld\n", vc.s_maxbytes);
     printf("Device identifier: %lu\n", vc.s_dev);
-    puts(" --- socket --- ");
+    puts("\n --- socket --- ");
 
     char* sstates[] = {
         "not allocated",
@@ -159,7 +177,7 @@ int main(int argc, char *argv[]) {
 
     printf("Socket state: %s\n", sstates[sc.state]);
     printf("Socket type: %s\n", stypes[sc.type]);
-    printf("Socket flags: %#0lx\n", sc.flags);
+    print_sflags(sc.flags);
 
     close(fd); 
     close(socketfd);
